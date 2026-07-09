@@ -131,6 +131,11 @@ extern "C" {
         CASE_KSTEP_SEL(LX, autotune_eb[LX]);                                    \
       }                                                                         \
       break
+
+#define CASE_LARGE(LX)                                                          \
+    case LX:                                                                    \
+      CASE_KSTEP(LX);                                                           \
+      break
     
     switch(*lx) {
       CASE(2);
@@ -144,6 +149,11 @@ extern "C" {
       CASE(10);
       CASE(11);
       CASE(12);
+      CASE_LARGE(13);
+      CASE_LARGE(14);
+      CASE_LARGE(15);
+      CASE_LARGE(16);
+      CASE_LARGE(17);
     default:
       {
         fprintf(stderr, __FILE__ ": size not supported: %d\n", *lx);
@@ -303,4 +313,3 @@ int tune_lambda2(void *lambda2, void *u, void *v, void *w,
   log_end_section();
   return retval;
 }
-

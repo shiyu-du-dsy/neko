@@ -96,6 +96,13 @@ extern "C" {
     static int autotune_tw[17] = { 0 };
 
     const dim3 nblcks_1d((*nelv), 1, 1);
+    const dim3 nthrds_kstep((*lx), (*lx), 1);
+    const dim3 nblcks_kstep((*nelv), 1, 1);
+    const int n = (*nelv) * (*lx) * (*lx) * (*lx);
+    const dim3 nblcks_global((n + 1024 - 1) / 1024, 1, 1);
+
+    const dim3 nthrds((*lx), (*lx), 1);
+    const dim3 nblcks((*nelv), 1, 1);
     const cudaStream_t stream = (cudaStream_t) glb_cmd_queue;
 
 #define CASE_1D(LX, C)                                                          \
@@ -190,6 +197,17 @@ extern "C" {
     default: CASE_DMMA_TMA(LX, 2); break;                                       \
     }
 
+#define CASE_GLOBAL(LX)                                                         \
+    case LX:                                                                    \
+      ax_helm_kernel_global<real>                                               \
+        <<<nblcks_global, nthrds_1d, 0, stream>>>((real *) w, (real *) u,       \
+                          (real *) dx, (real *) dy, (real *) dz,                \
+                          (real *) dxt, (real *) dyt, (real *) dzt, (real *) h1,\
+                          (real *) g11, (real *) g22, (real *) g33,             \
+                          (real *) g12, (real *) g13, (real *) g23, *lx, n);    \
+      CUDA_CHECK(cudaGetLastError());                                           \
+      break
+
 #define CASE(LX)                                                                \
     case LX:                                                                    \
       if(autotune[LX] == 0 ) {                                                  \
@@ -273,6 +291,8 @@ extern "C" {
         CASE_LARGE(14);
         CASE_LARGE(15);
         CASE_LARGE_PADDED(16);
+        CASE_LARGE(17);
+        CASE_GLOBAL(33);
       default:
         {
           fprintf(stderr, __FILE__ ": size not supported: %d\n", *lx);
@@ -294,17 +314,22 @@ extern "C" {
                            void *g23, int *nelv, int *lx) {
 
     /* Strategy chosen by the autotuner: 2 kstep, 3 dmma */
-    static int autotune_vec[17] = { 0 };
+    static int autotune_vec[18] = { 0 };
     /* elements per block candidate chosen for the kstep variant */
-    static int autotune_vec_eb[17] = { 0 };
+    static int autotune_vec_eb[18] = { 0 };
     /* warps per block candidate chosen for the dmma variant */
-    static int autotune_vec_nw[17] = { 0 };
+    static int autotune_vec_nw[18] = { 0 };
     /* warps per block candidate chosen for the tma staged dmma variant */
-    static int autotune_vec_tw[17] = { 0 };
+    static int autotune_vec_tw[18] = { 0 };
     /* warps per block candidate chosen for the batched tma variant */
-    static int autotune_vec_bw[17] = { 0 };
+    static int autotune_vec_bw[18] = { 0 };
 
     const dim3 nblcks_dmma((*nelv), 1, 1);
+    const dim3 nthrds((*lx), (*lx), 1);
+    const dim3 nblcks((*nelv), 1, 1);
+    const dim3 nthrds_1d(1024, 1, 1);
+    const int n = (*nelv) * (*lx) * (*lx) * (*lx);
+    const dim3 nblcks_global((n + 1024 - 1) / 1024, 1, 1);
     const cudaStream_t stream = (cudaStream_t) glb_cmd_queue;
 
 /*
@@ -422,6 +447,18 @@ extern "C" {
     case 1:  CASE_VECTOR_DMMA_TMA_BATCH(LX, 1); break;                         \
     default: CASE_VECTOR_DMMA_TMA_BATCH(LX, 2); break;                         \
     }
+#define CASE_VECTOR_GLOBAL(LX)                                                  \
+    case LX:                                                                    \
+      ax_helm_kernel_vector_global<real>                                        \
+      <<<nblcks_global, nthrds_1d, 0, stream>>>((real *) au, (real *) av,       \
+                                     (real *) aw, (real *) u, (real *) v,       \
+                                     (real *) w, (real *) dx, (real *) dy,      \
+                                     (real *) dz, (real *) h1, (real *) g11,    \
+                                     (real *) g22, (real *) g33, (real *) g12,  \
+                                     (real *) g13, (real *) g23, *lx, n);       \
+      CUDA_CHECK(cudaGetLastError());                                           \
+      break
+
 
 #define CASE_VECTOR(LX)                                                        \
     case LX:                                                                   \
@@ -483,6 +520,8 @@ extern "C" {
       CASE_VECTOR(14);
       CASE_VECTOR(15);
       CASE_VECTOR_PADDED(16);
+      CASE_VECTOR(17);
+      CASE_VECTOR_GLOBAL(33);
       default:
         {
           fprintf(stderr, __FILE__ ": size not supported: %d\n", *lx);

@@ -74,6 +74,8 @@ extern "C" {
     const dim3 nthrds_1d(1024, 1, 1);
     const dim3 nthrds_kstep((*lx), (*lx), 1);
     const dim3 nblcks((*nel), 1, 1);
+    const int n = (*nel) * (*lx) * (*lx) * (*lx);
+    const dim3 nblcks_global((n + 1024 - 1) / 1024, 1, 1);
     const cudaStream_t stream = (cudaStream_t) glb_cmd_queue;
 
 #define CASE_1D(LX, C)                                                          \
@@ -176,6 +178,16 @@ extern "C" {
       CASE_KSTEP(LX, 0);                                                        \
       break
 
+#define CASE_GLOBAL(LX)                                                         \
+    case LX:                                                                    \
+      dudxyz_kernel_global<real>                                                \
+        <<<nblcks_global, nthrds_1d, 0, stream>>>((real *) du, (real *) u,      \
+                                      (real *) dr, (real *) ds, (real *) dt,    \
+                                      (real *) dx, (real *) dy, (real *) dz,    \
+                                      (real *) jacinv, *lx, n);                 \
+      CUDA_CHECK(cudaGetLastError());                                           \
+      break
+
 
     if ((*lx) < 11) {
       switch(*lx) {
@@ -203,6 +215,8 @@ extern "C" {
         CASE_LARGE(14);
         CASE_LARGE(15);
         CASE_LARGE(16);
+        CASE_LARGE(17);
+        CASE_GLOBAL(33);
       default:
         {
           fprintf(stderr, __FILE__ ": size not supported: %d\n", *lx);
