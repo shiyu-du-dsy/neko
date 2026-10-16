@@ -134,7 +134,7 @@ extern "C" {
 
 #define CASE_LARGE(LX)                                                          \
     case LX:                                                                    \
-      CASE_KSTEP(LX);                                                           \
+      CASE_KSTEP(LX, 0);                                                        \
       break
     
     switch(*lx) {

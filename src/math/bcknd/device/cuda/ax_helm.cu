@@ -95,6 +95,7 @@ extern "C" {
     /* warps per block candidate chosen for the tma staged dmma variant */
     static int autotune_tw[17] = { 0 };
 
+    const dim3 nthrds_1d(1024, 1, 1);
     const dim3 nblcks_1d((*nelv), 1, 1);
     const dim3 nthrds_kstep((*lx), (*lx), 1);
     const dim3 nblcks_kstep((*nelv), 1, 1);

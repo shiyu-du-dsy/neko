@@ -194,7 +194,7 @@ extern "C" {
 
 #define CASE_KSTEP_ONLY(LX)                                                     \
     case LX:                                                                    \
-      CASE_KSTEP(LX);                                                           \
+      CASE_KSTEP(LX, 0);                                                        \
       break
 
 #define CASE_GLOBAL(LX)                                                         \
