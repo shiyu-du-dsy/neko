@@ -569,7 +569,7 @@ contains
 
     if (this%full_stress_formulation) then
        if (this%svv_enabled) then
-          if (this%svv%formulation .eq. "factorized") then
+          if (this%svv%uses_factorized_operator()) then
              call ax_helm_allocator(this%Ax_vel, &
                   type_name = "full_factorized_svv")
           else
@@ -585,7 +585,7 @@ contains
        end if
     else
        if (this%svv_enabled) then
-          if (this%svv%formulation .eq. "factorized") then
+          if (this%svv%uses_factorized_operator()) then
              call ax_helm_allocator(this%Ax_vel, type_name = "factorized_svv")
           else
              call ax_helm_allocator(this%Ax_vel, type_name = "one_sided_svv")

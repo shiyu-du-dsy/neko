@@ -49,9 +49,9 @@ module spectral_vanishing_viscosity
 
   character(len=3), parameter :: KNOWN_DIRECTIONS(7) = [character(len=3) :: &
        "rst", "rs", "rt", "st", "r", "s", "t"]
-  character(len=10), parameter :: KNOWN_FORMULATIONS(2) = &
+  character(len=10), parameter :: KNOWN_FORMULATIONS(3) = &
        [character(len=10) :: &
-       "one-sided", "factorized"]
+       "one-sided", "factorized", "vms"]
   character(len=5), parameter :: KNOWN_NU_TYPES(2) = [character(len=5) :: &
        "value", "field"]
   character(len=5), parameter :: KNOWN_KERNEL_TYPES(1) = [character(len=5) :: &
@@ -76,7 +76,8 @@ module spectral_vanishing_viscosity
      !> Identity matrix used to disable filtering in selected directions.
      real(kind=rp), allocatable :: ident(:,:)
      type(c_ptr) :: ident_d = C_NULL_PTR
-     !> Complementary derivatives, (I - F) D, for factorized SVV.
+     !> Complementary derivatives, (I - F) D for factorized SVV and
+     !! D (I - F) for the variational multiscale (VMS) formulation.
      real(kind=rp), allocatable :: Br(:,:), Bs(:,:), Bt(:,:)
      type(c_ptr) :: Br_d = C_NULL_PTR
      type(c_ptr) :: Bs_d = C_NULL_PTR
@@ -90,6 +91,8 @@ module spectral_vanishing_viscosity
      procedure, pass(this) :: init => svv_init_from_json
      procedure, pass(this) :: free => svv_free
      procedure, pass(this) :: update => svv_update_h1
+     procedure, pass(this) :: uses_factorized_operator => &
+          svv_uses_factorized_operator
   end type svv_t
 
 contains
@@ -138,7 +141,7 @@ contains
        if (power_coef .eq. 0.0_rp) then
           transfer = 0.0_rp
        else
-          if (this%formulation .eq. "factorized") then
+          if (this%uses_factorized_operator()) then
              exponent_factor = 0.5_rp
           else
              exponent_factor = 1.0_rp
@@ -162,7 +165,7 @@ contains
        this%ident(i, i) = 1.0_rp
     end do
 
-    if (this%formulation .eq. "factorized") then
+    if (this%uses_factorized_operator()) then
        call svv_build_complementary_derivatives(this)
     end if
 
@@ -208,7 +211,15 @@ contains
     if (allocated(formulation)) deallocate(formulation)
   end subroutine svv_init_from_json
 
-  !> Build the complementary derivative matrices used by factorized SVV.
+  !> Build the complementary derivative matrices used by factorized SVV
+  !! and VMS.
+  !! @details For the factorized SVV formulation, the derivative of the
+  !! high-pass filtered solution is approximated by filtering the derivative,
+  !! \f$ B = (I - F) D \f$. For the variational multiscale (VMS) formulation,
+  !! the order of differentiation and filtering is swapped, so that the
+  !! derivative of the unresolved scales is taken, \f$ B = D (I - F) \f$.
+  !! In both cases the operator applied by the kernel is
+  !! \f$ B^T \nu_{svv} B \f$.
   !! @param this SVV object.
   subroutine svv_build_complementary_derivatives(this)
     class(svv_t), intent(inout) :: this
@@ -223,14 +234,28 @@ contains
     this%Br = 0.0_rp
     this%Bs = 0.0_rp
     this%Bt = 0.0_rp
-    if (index(this%direction, "r") > 0) then
-       this%Br = matmul(complementary_filter, this%coef%Xh%dx)
-    end if
-    if (index(this%direction, "s") > 0) then
-       this%Bs = matmul(complementary_filter, this%coef%Xh%dy)
-    end if
-    if (index(this%direction, "t") > 0) then
-       this%Bt = matmul(complementary_filter, this%coef%Xh%dz)
+    if (this%formulation .eq. "vms") then
+       ! VMS: differentiate the small (unresolved) scales, D (I - F).
+       if (index(this%direction, "r") > 0) then
+          this%Br = matmul(this%coef%Xh%dx, complementary_filter)
+       end if
+       if (index(this%direction, "s") > 0) then
+          this%Bs = matmul(this%coef%Xh%dy, complementary_filter)
+       end if
+       if (index(this%direction, "t") > 0) then
+          this%Bt = matmul(this%coef%Xh%dz, complementary_filter)
+       end if
+    else
+       ! Factorized SVV: filter the derivative, (I - F) D.
+       if (index(this%direction, "r") > 0) then
+          this%Br = matmul(complementary_filter, this%coef%Xh%dx)
+       end if
+       if (index(this%direction, "s") > 0) then
+          this%Bs = matmul(complementary_filter, this%coef%Xh%dy)
+       end if
+       if (index(this%direction, "t") > 0) then
+          this%Bt = matmul(complementary_filter, this%coef%Xh%dz)
+       end if
     end if
 
     if (NEKO_BCKND_DEVICE .eq. 1) then
@@ -247,6 +272,17 @@ contains
 
     deallocate(complementary_filter)
   end subroutine svv_build_complementary_derivatives
+
+  !> Whether the formulation uses the factorized operator
+  !! \f$ B^T \nu_{svv} B \f$, i.e. `factorized` SVV or `vms`.
+  !! @param this SVV object.
+  pure function svv_uses_factorized_operator(this) result(factorized)
+    class(svv_t), intent(in) :: this
+    logical :: factorized
+
+    factorized = (this%formulation .eq. "factorized") .or. &
+         (this%formulation .eq. "vms")
+  end function svv_uses_factorized_operator
 
   !> Update a time-varying, field-valued SVV viscosity.
   !! @param this SVV object.
