@@ -38,6 +38,7 @@ module lpt_simcomp
   use time_state, only : time_state_t
   use num_types, only : dp
   use lpt, only : lpt_t
+  use profiler, only : profiler_start_region, profiler_end_region
   implicit none
   private
 
@@ -105,7 +106,9 @@ contains
     class(lpt_simcomp_t), intent(inout) :: this
     type(time_state_t), intent(in) :: time
 
+    call profiler_start_region('LPT')
     call this%lpt%preprocess(time)
+    call profiler_end_region('LPT')
   end subroutine lpt_simcomp_preprocess
 
   !> Update LPT after the fluid solve.
@@ -113,7 +116,9 @@ contains
     class(lpt_simcomp_t), intent(inout) :: this
     type(time_state_t), intent(in) :: time
 
+    call profiler_start_region('LPT')
     call this%lpt%compute(time)
+    call profiler_end_region('LPT')
   end subroutine lpt_simcomp_compute
 
   !> Restore the particles after the checkpoint has been read.
